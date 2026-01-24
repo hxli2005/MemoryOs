@@ -1,0 +1,162 @@
+services:
+  # ==================== 基础服务 ====================
+  
+  # etcd - Milvus 元数据存储
+  etcd:
+    container_name: memoryos-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./data/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    networks:
+      - memoryos-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - Milvus 对象存储
+  minio:
+    container_name: memoryos-minio
+    image: minio/minio:latest
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ./data/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Web 控制台
+    networks:
+      - memoryos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== 数据库服务 ====================
+  
+  # PostgreSQL with pgvector
+  postgres:
+    container_name: memoryos-postgres
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: memoryos
+      POSTGRES_PASSWORD: memoryos123
+      POSTGRES_DB: memoryos
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "15432:5432" # 使用 15432 避免与本地 PostgreSQL 冲突
+    networks:
+      - memoryos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memoryos"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  # Redis
+  redis:
+    container_name: memoryos-redis
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - memoryos-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Milvus Standalone
+  milvus:
+    container_name: memoryos-milvus
+    image: milvusdb/milvus:v2.3.3
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ./data/milvus:/var/lib/milvus
+    ports:
+      - "19530:19530"  # gRPC API
+      - "9091:9091"    # Web UI (Attu 可选)
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - memoryos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ==================== 应用服务 ====================
+  
+  # MemoryOS Application
+  memoryos:
+    container_name: memoryos-app
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=memoryos
+      - DB_PASSWORD=memoryos123
+      - DB_NAME=memoryos
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - LLM_PROVIDER=openai
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - EMBEDDING_PROVIDER=openai
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+    networks:
+      - memoryos-network
+    restart: unless-stopped
+
+# ==================== 网络配置 ====================
+networks:
+  memoryos-network:
+    driver: bridge
+
+# ==================== 数据卷配置 ====================
+# 使用 Bind Mount 方式，数据存储在项目目录下
+# 优势：方便备份、迁移、查看数据文件

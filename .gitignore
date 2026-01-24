@@ -1,0 +1,55 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cmd/server/server
+bin/
+server.exe
+
+# Test binaries
+*.test
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Config (may contain secrets)
+config/config.yaml
+!config/config.example.yaml
+!config/test/*.yaml
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Docker
+data/
+docker/daemon*.json
+
+# Temporary
+tmp/
+temp/
+pkg/
+
+# Analysis documents (temporary)
+PROJECT_STRUCTURE_ANALYSIS.md

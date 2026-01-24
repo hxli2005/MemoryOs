@@ -1,0 +1,58 @@
+# ==================== Docker 构建忽略文件 ====================
+
+# Git 相关
+.git
+.gitignore
+.github
+
+# 文档
+README.md
+docs/
+*.md
+
+# 测试文件
+*_test.go
+test/
+# examples/  # 保留 examples 用于构建 qqbot
+
+# 构建产物
+*.exe
+*.out
+memoryos
+bin/
+dist/
+
+# 数据文件
+data/
+logs/
+*.log
+
+# 临时文件
+tmp/
+*.tmp
+*.swp
+*~
+
+# IDE 配置
+.vscode/
+.idea/
+*.iml
+
+# 环境变量
+.env.local
+.env.production
+
+# Docker 相关
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 依赖（会在容器内重新下载）
+vendor/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 编译缓存
+.cache/

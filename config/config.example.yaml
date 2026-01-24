@@ -1,0 +1,81 @@
+# MemoryOS 配置文件
+# 请根据你的实际环境修改以下配置
+
+app:
+  name: "memoryos"
+  version: "0.1.0"
+  env: "development"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# ⚠️ 重要：配置你的 LLM API Key
+# 支持 Google Gemini（推荐，免费）或 OpenAI
+#
+# Gemini 获取方式：https://aistudio.google.com/app/apikey
+# OpenAI 获取方式：https://platform.openai.com/api-keys
+
+llm:
+  provider: "gemini"            # 使用 Google Gemini（可选：openai）
+  model: "gemini-2.0-flash-exp" # 推荐模型：gemini-2.0-flash-exp（最新且免费）
+  api_key: "YOUR_GEMINI_API_KEY"  # 👈 替换为你的 Gemini API Key
+  base_url: ""                  # Gemini 不需要 base_url
+  temperature: 0.7
+  max_tokens: 2000
+
+embedder:
+  provider: "gemini"            # 使用 Google Gemini（可选：openai）
+  model: "text-embedding-004"   # Gemini 推荐 embedding 模型
+  api_key: "YOUR_GEMINI_API_KEY"  # 👈 替换为你的 Gemini API Key
+  base_url: ""                  # Gemini 不需要 base_url
+  dimension: 768                 # text-embedding-004 输出 768 维向量
+
+# 数据库配置（留空则使用 Mock 模式）
+# Mock 模式：数据存在内存中，程序重启会丢失
+# 如需持久化存储，请配置以下数据库
+database:
+  host: ""                      # 👈 填入 "localhost" 启用 PostgreSQL
+  port: 5432
+  user: "postgres"
+  password: "your_password"
+  database: "memoryos"
+  sslmode: "disable"
+
+redis:
+  host: ""                      # 👈 填入 "localhost:6379" 启用 Redis
+  password: ""
+  db: 0
+  pool_size: 10
+
+vector_db:
+  provider: "milvus"
+  host: ""                      # 👈 填入 "localhost:19530" 启用 Milvus
+  collection_name: "memoryos_vectors"
+  dimension: 1536
+  metric_type: "IP"             # 内积（Inner Product）
+  index_type: "IVF_FLAT"        # 索引类型
+
+# 记忆管理配置
+memory:
+  # 默认召回数量
+  default_topk: 10
+  
+  # 向量搜索相似度阈值
+  similarity_threshold: 0.7
+  
+  # 对话层保留轮次（超过后自动聚合到 Topic 层）
+  dialogue_window_size: 20
+  
+  # 记忆重要性权重（Layer-aware Importance）
+  importance_weights:
+    dialogue: 0.6    # 对话层
+    topic: 0.8       # 话题层
+    profile: 1.0     # 画像层（最重要）
+
+# 日志配置
+log:
+  level: "info"                # debug | info | warn | error
+  format: "json"               # json | text
+  output: "stdout"             # stdout | file
+  file_path: "logs/app.log"    # 仅在 output=file 时有效

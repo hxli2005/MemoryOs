@@ -1,0 +1,46 @@
+# Docker 容器专用配置
+# 使用 Docker 网络内的服务名访问
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+
+database:
+  postgres:
+    host: "memoryos-postgres"  # Docker 容器名
+    port: 5432                  # 容器内端口（不是映射端口）
+    user: "memoryos"
+    password: "memoryos123"
+    dbname: "memoryos"
+    sslmode: "disable"
+  
+  redis:
+    host: "memoryos-redis"      # Docker 容器名
+    port: 6379
+    password: ""
+    db: 0
+
+vector:
+  provider: "milvus"            # 使用 Milvus 向量存储
+  milvus:
+    host: "memoryos-milvus"     # Docker 容器名
+    port: 19530
+
+llm:
+  provider: "openai"
+  api_key: "sk-pMbjWcgMus0HAFZ8uKBPYqzoStHK9letE7dssEXK8IN8ZYX6"
+  model: "gemini-3-flash-preview"
+  base_url: "https://api.lingyaai.cn/v1"
+  
+embedding:
+  provider: "openai"
+  api_key: "sk-pMbjWcgMus0HAFZ8uKBPYqzoStHK9letE7dssEXK8IN8ZYX6"
+  model: "qwen3-embedding-4b"
+  base_url: "https://api.lingyaai.cn/v1"
+  dimension: 768
+
+memory:
+  max_working_memory: 10
+  compression_threshold: 100
+  decay_days: 30

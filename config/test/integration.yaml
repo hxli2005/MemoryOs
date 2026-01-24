@@ -1,0 +1,5 @@
+﻿llm:
+  provider: "gemini"  
+  api_key: "sk-pMbjWcgMus0HAFZ8uKBPYqzoStHK9letE7dssEXK8IN8ZYX6"
+  model: "gemini-3-flash-preview"
+  base_url: "https://api.lingyaai.cn"

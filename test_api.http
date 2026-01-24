@@ -1,0 +1,123 @@
+### MemoryOS API 测试文件
+### 在 VS Code 中安装 REST Client 扩展后可以直接点击 Send Request 测试
+
+@baseUrl = http://localhost:8080
+@userId = user_alice
+@sessionId = session_001
+
+### 1. 健康检查
+GET {{baseUrl}}/health
+
+### 2. 创建对话记忆 - 用户消息
+POST {{baseUrl}}/api/v1/memories
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "layer": "dialogue",
+  "type": "user_message",
+  "content": "我想学习 Go 的并发编程，特别是 goroutine 和 channel 的使用",
+  "metadata": {
+    "session_id": "{{sessionId}}",
+    "turn_number": 1,
+    "role": "user",
+    "timestamp": "2026-01-21T15:30:00Z"
+  }
+}
+
+### 3. 创建对话记忆 - 助手回复
+POST {{baseUrl}}/api/v1/memories
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "layer": "dialogue",
+  "type": "assistant_message",
+  "content": "很好！Go 的并发模型是其最强大的特性之一。让我们从基础开始：\n\n1. Goroutine 是轻量级线程\n2. Channel 用于 goroutine 间通信\n3. 使用 select 处理多个 channel\n\n你想先了解哪个方面？",
+  "metadata": {
+    "session_id": "{{sessionId}}",
+    "turn_number": 2,
+    "role": "assistant",
+    "timestamp": "2026-01-21T15:30:05Z"
+  }
+}
+
+### 4. 创建用户画像
+POST {{baseUrl}}/api/v1/memories
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "layer": "profile",
+  "type": "user_identity",
+  "content": "Alice 是一名后端工程师，主要使用 Python，最近开始学习 Go 语言",
+  "metadata": {
+    "category": "identity",
+    "tags": ["后端工程师", "Python开发者", "Go学习者"],
+    "confidence_level": 0.9,
+    "is_pinned": true
+  }
+}
+
+### 5. 创建沟通风格画像
+POST {{baseUrl}}/api/v1/memories
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "layer": "profile",
+  "type": "communication_style",
+  "content": "Alice 偏好详细的技术解释，喜欢看代码示例，对最佳实践很感兴趣",
+  "metadata": {
+    "category": "style",
+    "tags": ["详细解释", "代码示例", "最佳实践"],
+    "confidence_level": 0.85,
+    "is_pinned": true
+  }
+}
+
+### 6. 搜索记忆
+POST {{baseUrl}}/api/v1/memories/search
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "query": "Go 并发编程",
+  "top_k": 5
+}
+
+### 7. 召回对话上下文
+POST {{baseUrl}}/api/v1/recall/dialogue
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "session_id": "{{sessionId}}",
+  "recent_turns": 10
+}
+
+### 8. 召回用户画像
+POST {{baseUrl}}/api/v1/recall/profile
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "category": "identity"
+}
+
+### 9. 混合召回（自适应策略）
+POST {{baseUrl}}/api/v1/recall/hybrid
+Content-Type: application/json
+
+{
+  "user_id": "{{userId}}",
+  "session_id": "{{sessionId}}",
+  "query": "继续讲解 goroutine",
+  "dialog_stage": "multi_turn",
+  "max_tokens": 4000
+}
+
+### 10. 列出记忆
+GET {{baseUrl}}/api/v1/memories?user_id={{userId}}&layer=profile&limit=10
+
+###
