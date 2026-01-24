@@ -1,9 +1,10 @@
 # 🧠 MemoryOS
 
-> **基于三层记忆架构的 AI Agent 长期记忆系统**  
-> 专为 Chatbot 场景设计，对抗"人格与话题连续性的熵增"
+> **基于 RAG 架构的 AI Agent 长期记忆系统**  
+> 生产级实现 | Docker 一键部署 | QQ Bot 完整示例
 
-[![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](https://golang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](docker-compose.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/dev/CONTRIBUTING.md)
 
@@ -36,69 +37,55 @@ Dialogue Layer (对话层)    → 刚说什么？即时上下文
 
 ## 🚀 快速开始
 
-### 1️⃣ 配置 API Key
+### 方式一：Docker 部署（推荐）
 
-MemoryOS 支持 **Google Gemini**（推荐，免费）或 **OpenAI**：
+```powershell
+# 1. 克隆仓库
+git clone https://github.com/yourusername/MemoryOS.git
+cd MemoryOS
 
-#### 方式一：使用 Google Gemini（推荐）
+# 2. 配置 API Key（编辑 .env 文件）
+LLM_API_KEY=your-api-key-here
+EMBEDDING_API_KEY=your-api-key-here
 
-```yaml
-# 编辑 config/config.yaml
-llm:
-  provider: "gemini"
-  api_key: "YOUR_GEMINI_API_KEY"  # 从 https://aistudio.google.com/app/apikey 获取
-  model: "gemini-2.0-flash-exp"   # 免费且强大
+# 3. 启动完整技术栈（PostgreSQL + Redis + Milvus）
+docker-compose up -d
 
-embedder:
-  provider: "gemini"
-  api_key: "YOUR_GEMINI_API_KEY"
-  model: "text-embedding-004"
-  dimension: 768
+# 4. 查看日志
+docker logs -f memoryos-app
 ```
 
-> 💡 **为什么选择 Gemini？** 完全免费 + 性能优秀 + 无需信用卡
+访问 http://localhost:8080 验证 API 服务运行正常。
 
-#### 方式二：使用 OpenAI
+### 方式二：QQ Bot 示例
 
-```yaml
-# 编辑 config/config.yaml
-llm:
-  provider: "openai"
-  api_key: "sk-YOUR_OPENAI_API_KEY"  # 从 https://platform.openai.com/api-keys 获取
-  model: "gpt-4o-mini"
+体验完整的长期记忆对话机器人：
 
-embedder:
-  provider: "openai"
-  api_key: "sk-YOUR_OPENAI_API_KEY"
-  model: "text-embedding-3-small"
-  dimension: 1536
+```powershell
+# 1. 配置 NapCat（参考 examples/qqbot/NAPCAT_SETUP.md）
+
+# 2. 启动 QQ Bot
+docker-compose -f docker-compose.qqbot.yaml up -d
+
+# 3. 通过 QQ 私聊测试
+# Bot 会记住你的对话历史、兴趣偏好和聊天风格
 ```
 
-详细配置指南：[Gemini 配置指南](docs/GEMINI_SETUP.md)
+详见 [QQ Bot 使用指南](examples/qqbot/README.md)
 
-### 2️⃣ 启动 HTTP API 服务器
+### 方式三：本地开发
 
 ```bash
-# 启动 API 服务器
+# 1. 配置环境
+cp config/config.example.yaml config/config.yaml
+# 编辑 config.yaml，填写 LLM API Key
+
+# 2. 启动服务
 go run cmd/server/main.go
 
-# 服务将在 http://localhost:8080 启动
+# 3. 测试 API
+curl http://localhost:8080/health
 ```
-
-### 3️⃣ 测试 API
-
-使用提供的测试文件快速验证功能：
-
-```bash
-# 查看 Web 测试界面
-open test/index.html  # Mac/Linux
-start test/index.html # Windows
-
-# 或使用 REST Client 测试
-# 在 VSCode 中打开 test/test_api.http
-```
-
-详见 [API 使用指南](docs/api/API_GUIDE.md)
 
 ## 🏗️ 项目架构
 
@@ -182,12 +169,37 @@ Content-Type: application/json
 
 | 组件          | 技术选型                          | 用途                     |
 |--------------|----------------------------------|--------------------------|
-| 语言          | Go 1.23.3                        | 核心开发语言              |
+| 语言          | Go 1.24+                         | 核心开发语言              |
 | AI 框架       | [Eino](https://github.com/cloudwego/eino) | LLM/Embedding 抽象层 |
-| Web 框架      | Gin                              | HTTP API                 |
-| 向量数据库    | Milvus (planned)                 | 向量存储与检索            |
-| 关系型数据库  | PostgreSQL + pgvector            | 元数据存储                |
-| 缓存          | Redis                            | 热点画像缓存              |
+| 向量数据库    | Milvus 2.3.3                     | 高性能向量检索            |
+| 关系型数据库  | PostgreSQL + pgvector            | 元数据与向量存储          |
+| 缓存          | Redis 7                          | 会话缓存                  |
+| 消息队列      | NapCat WebSocket                 | QQ Bot 消息接入           |
+| 容器编排      | Docker Compose                   | 一键部署全栈              |
+| 监控方案      | Prometheus + Grafana（规划中）    | 指标采集与可视化          |
+
+## 🎯 完整示例
+
+### QQ Bot - 生产级长期记忆对话机器人
+
+完整实现包括：
+- ✅ NapCat WebSocket 消息收发
+- ✅ Persona 配置化人设（4 个预设角色可切换）
+- ✅ 三段式记忆召回（对话/主题/画像）
+- ✅ 好感度系统与用户画像
+- ✅ Docker 部署与数据持久化
+
+详见 **[examples/qqbot/README.md](examples/qqbot/README.md)**
+
+### 监控方案（规划中）
+
+基于 Prometheus + Grafana 的可视化监控：
+- 记忆操作 QPS 与召回耗时
+- LLM API 调用统计与 Token 消耗
+- 系统资源（Goroutine/内存/数据库连接池）
+- 业务指标（活跃用户数/好感度分布）
+
+可行性分析详见项目文档。
 
 ## 🔧 开发模式
 
@@ -245,16 +257,25 @@ vector_db:
 - [x] 集成测试与验证
 
 ### Phase B（已完成 ✅）
-- [x] 真实 PostgreSQL Store 实现
+- [x] 真实 PostgreSQL Store 实现（含 pgvector 扩展）
 - [x] 真实 Milvus Vector Store 实现
-- [x] LLM 驱动的话题聚合
-- [x] LLM 驱动的画像提取
+- [x] Docker Compose 编排（PostgreSQL + Redis + Milvus + etcd + MinIO）
+- [x] QQ Bot 生产级示例（NapCat 集成）
+- [x] Persona 配置化人设系统
+- [x] 好感度与长期记忆召回
 
-### Phase C（规划中 📝）
+### Phase C（进行中 🚧）
+- [x] Docker 一键部署
+- [x] 数据持久化与备份
 - [ ] 记忆压缩与老化（Decay）
-- [ ] Web UI（Vue/React）
-- [ ] 部署文档（Docker Compose）
-- [ ] 性能优化与监控
+- [ ] Prometheus + Grafana 监控
+- [ ] pgvector VectorStore 实现（当前仅 Milvus）
+
+### Phase D（规划中 📝）
+- [ ] Web UI 管理后台（Vue/React）
+- [ ] 多平台 Chatbot 适配器（微信/Telegram/Discord）
+- [ ] 性能优化（缓存策略、批处理）
+- [ ] 分布式部署文档
 
 ## 💡 设计理念
 

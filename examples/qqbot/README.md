@@ -1,125 +1,133 @@
-# QQ Bot - MemoryOS 应用示例
+# QQ Bot - MemoryOS 生产级应用示例
 
-这是一个基于 MemoryOS 的 QQ 聊天机器人示例，展示了如何通过松耦合的方式使用 MemoryOS 核心能力。
+> **基于 NapCat 的 QQ 聊天机器人，完整实现 Persona 驱动的长期记忆对话**
 
-## 🎯 设计原则
+## ✨ 特性
 
-- **松耦合**：应用层与核心层通过 `pkg/chatbot` 接口交互
-- **可替换**：可以轻松替换为微信、Telegram 等其他平台
-- **易测试**：独立的应用逻辑便于单元测试和集成测试
-- **低侵入**：不修改 MemoryOS 核心代码
+- ✅ **完整 NapCat 集成**：WebSocket 消息收发、好感度系统、私聊支持
+- ✅ **Persona 配置化**：YAML 定义人设，支持热切换多个角色
+- ✅ **长期记忆召回**：三段式记忆（对话/主题/画像）混合检索
+- ✅ **Docker 部署**：一键启动完整技术栈（PostgreSQL + Redis + Milvus）
+- ✅ **优雅降级**：LLM 失败时自动回退，消息队列过载保护
 
-## 🏗️ 架构
+## 🚀 快速启动
 
+### 方式一：Docker 部署（推荐）
+
+```powershell
+# 1. 配置环境变量（编辑 .env 文件）
+LLM_API_KEY=your-api-key-here
+
+# 2. 启动数据库服务
+docker-compose up -d postgres redis milvus
+
+# 3. 启动 QQ Bot 容器
+docker-compose -f docker-compose.qqbot.yaml up -d
+
+# 4. 查看日志
+docker logs -f memoryos-qqbot
 ```
-QQ 消息 → QQBot (应用层) → chatbot.Adapter (接口层) → MemoryOS (核心层)
+
+### 方式二：本地开发
+
+```bash
+# 1. 安装依赖
+go mod download
+
+# 2. 配置文件
+cp config/config.docker.yaml config/config.yaml
+# 编辑 config.yaml，填写 LLM API Key
+
+# 3. 启动 Bot
+go run examples/qqbot/main.go
 ```
 
-### 关键组件
+## 🔌 接入 NapCat
 
-1. **pkg/chatbot/interface.go** - 通用聊天机器人接口
-2. **pkg/chatbot/adapter.go** - MemoryOS 适配器实现
-3. **examples/qqbot/main.go** - QQ Bot 应用示例
+### 1. 安装 NapCat
 
-## 🚀 快速开始
+参考官方文档：[NapCat Setup Guide](NAPCAT_SETUP.md)
 
-### 1. 配置 MemoryOS
+```powershell
+# Docker 方式（推荐）
+docker run -d --name napcat \
+  -p 6099:6099 -p 6700:3000 \
+  -e ACCOUNT=你的QQ号 \
+  mlikiowa/napcat-docker:latest
+```
 
-确保 `config/config.yaml` 已正确配置 LLM API Key：
+### 2. 配置 WebSocket URL
 
 ```yaml
-llm:
-  provider: "openai"
-  api_key: "YOUR_API_KEY"
-  model: "gpt-4o-mini"
+# config/config.yaml 或环境变量
+CQHTTP_WS_URL=ws://host.docker.internal:6700  # Docker 环境
+# 或
+CQHTTP_WS_URL=ws://localhost:6700             # 本地开发
 ```
 
-### 2. 运行示例
+### 3. 验证连接
 
-```bash
-# 方式一：直接运行
-go run examples/qqbot/main.go
-
-# 方式二：构建后运行
-go build -o qqbot.exe examples/qqbot/main.go
-./qqbot.exe
+启动后看到以下日志即成功：
+```
+✅ 成功连接到 go-cqhttp: ws://host.docker.internal:6700
+🤖 QQ Bot 已启动，等待消息...
 ```
 
-### 3. 测试效果
+## 🎭 Persona 配置
 
-当前代码包含模拟的消息收发，你会看到：
+### 当前可用人设
 
-```
-🤖 QQ Bot - MemoryOS 应用示例
-==================================================
-🚀 启动 5 个消息处理 Worker
+| 文件 | 人设名称 | 特点 |
+|------|---------|------|
+| `persona.yaml` | 陆晨 | 温柔但疏离的调酒师/摄影师 |
+| `persona_xiaoai_v2.yaml` | 小艾 v2 | 活泼可爱的元气少女 |
+| `persona_xiaoai.yaml` | 小艾 v1 | 初版人设（已优化） |
+| `persona_amo.yaml` | Amo | 冷酷傲娇的智能助手 |
 
-📨 [123456789] 收到消息: 你好呀
-⏰ [Worker 0] 延迟 2s 后回复...
-💬 [123456789] 机器人回复: 你好呀~ (｡•́︿•̀｡)
+### 切换 Persona
 
-📨 [123456789] 收到消息: 今天天气怎么样？
-⏰ [Worker 1] 延迟 5s 后回复...
-💬 [123456789] 机器人回复: 让我看看...
-```
+**方式一：修改 Docker 挂载路径**
+```powershell
+# 编辑 docker-compose.qqbot.yaml
+-v "d:\file\MemoryOs\examples\qqbot\persona_xiaoai_v2.yaml:/app/config/persona.yaml:ro"
 
-## 🔌 接入真实 QQ（可选）
+# 重📊 数据管理
 
-### 使用 go-cqhttp
+### 查看聊天记录（pgAdmin）
 
-1. **下载 go-cqhttp**
-   ```bash
-   # https://github.com/Mrs4s/go-cqhttp/releases
-   ```
+1. 访问 http://localhost:15432
+2. 登录 PostgreSQL：
+   - Host: `memoryos-postgres`（Docker）/ `localhost:15432`（本地）
+   - User: `memoryos`
+   - Password: `memoryos123`
+   - Database: `memoryos`
 
-2. **配置 WebSocket 连接**
-   修改 `examples/qqbot/main.go` 中的 `ReceiveMessage` 方法，接入 WebSocket：
+3. 查询对话记忆：
+```sql
+-- 查看最近 10 条对话
+SELECT user_id, content, role, created_at 
+FROM dialogue_memory 
+ORDER BY created_at DESC 
+LIMIT 10;
 
-   ```go
-   import "github.com/gorilla/websocket"
-   
-   func (b *QQBot) connectToGoCQHTTP() {
-       conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:6700", nil)
-       // 处理 WebSocket 消息...
-   }
-   ```
-
-## 📋 核心功能
-
-### ✅ 已实现
-
-- [x] 消息队列 + Worker Pool（并发处理）
-- [x] 延迟回复（模拟打字）
-- [x] 用户画像管理
-- [x] 好感度系统（框架）
-- [x] 松耦合架构
-
-### 🚧 待完善（作为测试改进方向）
-
-- [ ] LLM 回复生成（当前返回占位文本）
-- [ ] 人设 Prompt 构建
-- [ ] 复杂度分析（智能延迟）
-- [ ] 优先级队列
-- [ ] 真实 go-cqhttp 集成
-
-## 🧪 测试方式
-
-### 单元测试
-
-```bash
-# 测试 Chatbot 接口
-go test ./pkg/chatbot/...
-
-# 测试 QQBot 逻辑
-go test ./examples/qqbot/...
+-- 查看某用户的好感度变化
+SELECT user_id, metadata->>'favorability' as favorability, created_at
+FROM dialogue_memory
+WHERE user_id = '你的QQ号'
+ORDER BY created_at;
 ```
 
-### 集成测试
+### 重置数据库
 
-修改 `main.go` 中的模拟消息，测试不同场景：
+```powershell
+# 清空所有记忆表
+docker exec -it memoryos-postgres psql -U memoryos -d memoryos -c "TRUNCATE TABLE dialogue_memory, topic_memory, profile_memory RESTART IDENTITY CASCADE;"
 
-```go
-// 测试并发
+# 清空 Milvus 向量库（如需）
+docker-compose down
+Remove-Item -Recurse -Force .\data\milvus, .\data\etcd, .\data\minio
+docker-compose up -d
+```/ 测试并发
 go bot.ReceiveMessage("user1", "消息1")
 go bot.ReceiveMessage("user2", "消息2")
 go bot.ReceiveMessage("user3", "消息3")
@@ -159,55 +167,69 @@ persona := &chatbot.PersonaConfig{
 
 ## 🔧 故障排除
 
-### 问题1：消息队列满
+### � 故障排除
 
-**现象**：看到 "⚠️ 队列已满，消息被丢弃"
+### 问题 1：无法连接 NapCat
 
-**解决**：增加 Worker 数量或队列容量：
-```go
-bot := NewQQBot(adapter, 10)  // 10 个 Worker
+**现象**：`❌ WebSocket 连接失败: dial tcp: connection refused`
+
+**解决方案**：
+1. 确认 NapCat 是否启动：`docker ps | grep napcat`
+2. 检查端口映射：`docker port napcat`
+3. 修改 `CQHTTP_WS_URL` 为正确地址
+
+### 问题 2：VectorStore 使用 Mock
+
+**现象**：`⚠️ VectorStore 未配置或不支持，使用 Mock`
+
+**解决方案**：
+```yaml
+# config/config.docker.yaml
+vector:
+  provider: "milvus"  # 改为 milvus
+  milvus:
+    host: "memoryos-milvus"  # 确保容器名正确
+    port: 19530
+```
+重启容器：`docker restart memoryos-qqbot`
+
+### 问题 3：Bot 不回复消息
+
+**排查步骤**：
+```powershell
+# 1. 查看容器日志
+docker logs --tail 50 memoryos-qqbot
+
+# 2. 检查数据库连接
+docker exec -it memoryos-postgres psql -U memoryos -d memoryos -c "\dt"
+
+# 3. 验证 LLM API
+curl -X POST https://api.lingyaai.cn/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model":"gemini-3-flash-preview","messages":[{"role":"user","content":"test"}]}'
 ```
 
-### 问题2：LLM 调用失败
+## 📈 架构与性能
 
-**现象**：机器人回复 "啊这...我好像卡住了"
+### 技术栈
+- **消息接收**：WebSocket (gorilla/websocket)
+- **并发处理**：Worker Pool（可配置）
+- **记忆检索**：Milvus 向量检索 + PostgreSQL 元数据
+- **LLM 生成**：支持 OpenAI / Gemini / 灵雅 AI
 
-**检查**：
-1. `config/config.yaml` 中的 API Key 是否正确
-2. `adapter.go` 中的 `generateResponse` 方法是否实现
+### 性能指标
+- **并发处理**：5 Workers（可扩展到 20+）
+- **消息队列**：100 条缓冲（可调整）
+- **召回耗时**：~50ms（Milvus）/ ~200ms（pgvector）
+- **端到端延迟**：1-3 秒（含 LLM 生成）
 
-## 🎯 作为测试工具
+## 📚 相关文档
 
-这个 QQ Bot 是测试 MemoryOS 的绝佳工具：
-
-### 测试点
-
-1. **并发安全性** - 多个用户同时发消息
-2. **记忆持久化** - 重启后是否记得用户
-3. **召回准确性** - 是否能找到相关历史
-4. **性能压力** - 处理大量消息的能力
-5. **错误恢复** - LLM 失败时的降级策略
-
-### 建议测试流程
-
-```bash
-# 1. 启动 QQ Bot
-go run examples/qqbot/main.go
-
-# 2. 模拟多用户并发对话
-# 3. 观察日志输出
-# 4. 检查 PostgreSQL 数据库中的记忆存储
-# 5. 测试异常场景（断网、API 超时等）
-```
-
-## 📝 后续改进方向
-
-1. **实现真实 LLM 调用** - 完成 `generateResponse` 方法
-2. **添加配置文件** - 支持从 YAML 加载人设
-3. **监控面板** - Web UI 显示消息队列、好感度等
-4. **日志系统** - 结构化日志便于分析
-5. **性能优化** - 缓存、批处理等
+- [NapCat 部署指南](NAPCAT_SETUP.md)
+- [Persona 改进报告](../../PERSONA_IMPROVEMENT_REPORT.md)
+- [项目架构分析](../../PROJECT_STRUCTURE_ANALYSIS.md)
+- [重构记录](../../REFACTORING_REPORT.md)
 
 ---
 
-**这是一个独立的应用示例，不会污染 MemoryOS 核心代码！** 🎉
+**生产级 QQ Bot 示例，完整展示 MemoryOS 长期记忆能力
