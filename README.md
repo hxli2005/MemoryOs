@@ -57,23 +57,7 @@ docker logs -f memoryos-app
 
 访问 http://localhost:8080 验证 API 服务运行正常。
 
-### 方式二：QQ Bot 示例
-
-体验完整的长期记忆对话机器人：
-
-```powershell
-# 1. 配置 NapCat（参考 examples/qqbot/NAPCAT_SETUP.md）
-
-# 2. 启动 QQ Bot
-docker-compose -f docker-compose.qqbot.yaml up -d
-
-# 3. 通过 QQ 私聊测试
-# Bot 会记住你的对话历史、兴趣偏好和聊天风格
-```
-
-详见 [QQ Bot 使用指南](examples/qqbot/README.md)
-
-### 方式三：本地开发
+### 方式二：本地开发
 
 ```bash
 # 1. 配置环境
@@ -108,9 +92,8 @@ MemoryOs/
 ├── docs/
 │   ├── API_GUIDE.md     # API 文档
 │   └── CHATBOT_USAGE.md # Chatbot 使用指南
-└── test/
-    ├── index.html       # Web 测试界面
-    └── test_api.http    # REST Client 测试文件
+└── scripts/
+    └── test/            # 测试脚本
 ```
 
 ## 📖 核心 API
@@ -174,24 +157,11 @@ Content-Type: application/json
 | 向量数据库    | Milvus 2.3.3                     | 高性能向量检索            |
 | 关系型数据库  | PostgreSQL + pgvector            | 元数据与向量存储          |
 | 缓存          | Redis 7                          | 会话缓存                  |
-| 消息队列      | NapCat WebSocket                 | QQ Bot 消息接入           |
+| 消息队列      | Redis Stream                     | 异步消息处理           |
 | 容器编排      | Docker Compose                   | 一键部署全栈              |
 | 监控方案      | Prometheus + Grafana（规划中）    | 指标采集与可视化          |
 
-## 🎯 完整示例
-
-### QQ Bot - 生产级长期记忆对话机器人
-
-完整实现包括：
-- ✅ NapCat WebSocket 消息收发
-- ✅ Persona 配置化人设（4 个预设角色可切换）
-- ✅ 三段式记忆召回（对话/主题/画像）
-- ✅ 好感度系统与用户画像
-- ✅ Docker 部署与数据持久化
-
-详见 **[examples/qqbot/README.md](examples/qqbot/README.md)**
-
-### 监控方案（规划中）
+## 🎯 监控方案（规划中）
 
 基于 Prometheus + Grafana 的可视化监控：
 - 记忆操作 QPS 与召回耗时
@@ -260,7 +230,7 @@ vector_db:
 - [x] 真实 PostgreSQL Store 实现（含 pgvector 扩展）
 - [x] 真实 Milvus Vector Store 实现
 - [x] Docker Compose 编排（PostgreSQL + Redis + Milvus + etcd + MinIO）
-- [x] QQ Bot 生产级示例（NapCat 集成）
+- [x] 生产级示例（应用集成）
 - [x] Persona 配置化人设系统
 - [x] 好感度与长期记忆召回
 

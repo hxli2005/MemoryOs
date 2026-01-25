@@ -45,7 +45,7 @@ case $choice in
         ;;
     7)
         echo "运行环境测试..."
-        ./test_docker.bat
+        ./scripts/test/test_docker.bat
         ;;
     8)
         read -p "⚠️  确认删除所有数据? (y/N): " confirm

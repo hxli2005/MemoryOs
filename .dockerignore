@@ -13,7 +13,7 @@ docs/
 # 测试文件
 *_test.go
 test/
-# examples/  # 保留 examples 用于构建 qqbot
+examples/
 
 # 构建产物
 *.exe

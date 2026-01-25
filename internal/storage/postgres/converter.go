@@ -39,7 +39,8 @@ func MemoryToDialoguePO(m *model.Memory) (*DialogueMemoryPO, error) {
 
 	// 转换 Embedding
 	if len(m.Embedding) > 0 {
-		po.Embedding = pgvector.NewVector(m.Embedding)
+		vec := pgvector.NewVector(m.Embedding)
+		po.Embedding = &vec
 	}
 
 	// 转换 Metadata
@@ -94,7 +95,8 @@ func MemoryToTopicPO(m *model.Memory) (*TopicMemoryPO, error) {
 
 	// 转换 Embedding
 	if len(m.Embedding) > 0 {
-		po.Embedding = pgvector.NewVector(m.Embedding)
+		vec := pgvector.NewVector(m.Embedding)
+		po.Embedding = &vec
 	}
 
 	// 转换 Metadata
@@ -234,9 +236,11 @@ func DialoguePOToMemory(po *DialogueMemoryPO) (*model.Memory, error) {
 	}
 
 	// 转换 Embedding
-	embSlice := po.Embedding.Slice()
-	if len(embSlice) > 0 {
-		m.Embedding = embSlice
+	if po.Embedding != nil {
+		embSlice := po.Embedding.Slice()
+		if len(embSlice) > 0 {
+			m.Embedding = embSlice
+		}
 	}
 
 	// 转换 Metadata
@@ -281,9 +285,11 @@ func TopicPOToMemory(po *TopicMemoryPO) (*model.Memory, error) {
 	}
 
 	// 转换 Embedding
-	embSlice := po.Embedding.Slice()
-	if len(embSlice) > 0 {
-		m.Embedding = embSlice
+	if po.Embedding != nil {
+		embSlice := po.Embedding.Slice()
+		if len(embSlice) > 0 {
+			m.Embedding = embSlice
+		}
 	}
 
 	// 转换 Metadata

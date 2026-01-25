@@ -3,6 +3,7 @@ package memory
 import (
 	"context" // 用于错误包装
 	"fmt"
+	"strings"
 	"time"
 
 	// 生成唯一 ID
@@ -94,16 +95,32 @@ func (m *Manager) CreateMemory(ctx context.Context, memory *model.Memory) error 
 	}
 	memory.AccessCount = 0
 
-	// [第3部分] 生成 Embedding
-	embedding, err := m.embedder.Embed(ctx, memory.Content)
+	// [第3部分] 生成 Embedding（带重试机制）
+	embedding, err := m.embedWithRetry(ctx, memory.Content, 3)
 	if err != nil {
-		return fmt.Errorf("生成向量失败: %w", err)
+		// 降级处理：Embedding 失败时只存储到元数据库，跳过向量库
+		fmt.Printf("⚠️  [降级] 向量生成失败，仅存储元数据: %v\n", err)
+
+		// 设置 Embedding 为 nil（PostgreSQL 允许 NULL）
+		memory.Embedding = nil
+
+		// 直接存储到元数据库（无向量）
+		if err := m.metaStore.Insert(ctx, memory); err != nil {
+			return fmt.Errorf("存储到元数据库失败: %w", err)
+		}
+		// 成功但无向量，不影响对话流程
+		return nil
 	}
 	memory.Embedding = embedding
 
 	// [第4部分] 存储到向量库
 	if err := m.vectorStore.Insert(ctx, memory); err != nil {
-		return fmt.Errorf("存储到向量库失败: %w", err)
+		// 向量库失败时也降级：至少保证元数据存储成功
+		fmt.Printf("⚠️  [降级] 向量库存储失败，仅存储元数据: %v\n", err)
+		if err := m.metaStore.Insert(ctx, memory); err != nil {
+			return fmt.Errorf("存储到元数据库失败: %w", err)
+		}
+		return nil
 	}
 
 	// [第5部分] 存储到元数据库
@@ -305,6 +322,42 @@ func (m *Manager) RecallUserProfile(ctx context.Context, userID string, category
 	}
 
 	return filteredMemories, nil
+}
+
+// embedWithRetry Embedding 重试机制
+// 用于应对 API 频率限制（Rate Limit）和临时错误
+func (m *Manager) embedWithRetry(ctx context.Context, text string, maxRetries int) ([]float32, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		embedding, err := m.embedder.Embed(ctx, text)
+		if err == nil {
+			return embedding, nil
+		}
+
+		lastErr = err
+
+		// 检查错误类型
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "429") {
+			// 频率限制或权限错误，采用指数退避策略
+			// 基础延迟: 1s, 2s, 4s (更长的等待时间避免持续触发限制)
+			baseWait := time.Duration(1<<uint(attempt-1)) * time.Second
+			waitTime := baseWait
+			if waitTime > 5*time.Second {
+				waitTime = 5 * time.Second // 最大等待 5 秒
+			}
+			fmt.Printf("⚠️  [重试 %d/%d] Embedding API 错误，等待 %v 后重试: %v\n",
+				attempt, maxRetries, waitTime, err)
+			time.Sleep(waitTime)
+			continue
+		}
+
+		// 其他错误直接返回，不重试
+		return nil, fmt.Errorf("embedding 失败（不可重试）: %w", err)
+	}
+
+	return nil, fmt.Errorf("embedding 重试 %d 次后仍失败: %w", maxRetries, lastErr)
 }
 
 // HybridRecall 混合召回：根据对话阶段自适应组合三层记忆

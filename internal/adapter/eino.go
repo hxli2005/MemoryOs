@@ -2,9 +2,19 @@ package adapter
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/model"
+)
+
+var (
+	// 全局互斥锁,确保 Embedding 请求串行执行,避免触发服务商的并发限制
+	embeddingMutex sync.Mutex
+	// 最小请求间隔,防止瞬时连续请求被 WAF 拦截 (调整为 1s 以更好地规避限流)
+	minRequestInterval = 1 * time.Second
+	lastRequestTime    time.Time
 )
 
 // EinoEmbedder 适配 Eino 的 Embedder 到我们的接口
@@ -29,7 +39,21 @@ func NewEinoEmbedderWithDim(embedder embedding.Embedder, targetDim int) *EinoEmb
 }
 
 func (e *EinoEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	// 🔒 全局锁:确保同一时间只有一个 Embedding 请求,防止并发触发 403
+	embeddingMutex.Lock()
+	defer embeddingMutex.Unlock()
+
+	// ⏱️ 请求节流:确保两次请求之间有最小间隔
+	if !lastRequestTime.IsZero() {
+		elapsed := time.Since(lastRequestTime)
+		if elapsed < minRequestInterval {
+			time.Sleep(minRequestInterval - elapsed)
+		}
+	}
+
 	result, err := e.embedder.EmbedStrings(ctx, []string{text})
+	lastRequestTime = time.Now() // 记录请求时间
+
 	if err != nil {
 		return nil, err
 	}
