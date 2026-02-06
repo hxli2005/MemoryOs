@@ -1,0 +1,255 @@
+{
+  "dashboard": {
+    "title": "MemoryOS 核心业务监控",
+    "tags": ["memoryos", "rag", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "混合召回延迟分布 (P50/P95/P99)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(memory_recall_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(memory_recall_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(memory_recall_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "showPoints": "never"
+            }
+          }
+        },
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 2,
+        "title": "记忆创建成功率",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(memory_create_total{status=\"success\"}[5m])) / sum(rate(memory_create_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 95, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Embedding 生成 QPS",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(embedding_requests_total[1m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 5, "color": "yellow"},
+                {"value": 10, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "召回策略分布 (按对话阶段)",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(memory_recall_total) by (strategy)",
+            "legendFormat": "{{strategy}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "table", "placement": "right"},
+          "pieType": "donut"
+        }
+      },
+      {
+        "id": 5,
+        "title": "LLM 调用次数 (按 Provider)",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(llm_requests_total) by (provider)",
+            "legendFormat": "{{provider}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 6,
+        "title": "系统资源 (Goroutines & Memory)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "targets": [
+          {
+            "expr": "goroutines_count",
+            "legendFormat": "Goroutines",
+            "refId": "A",
+            "yAxisIndex": 0
+          },
+          {
+            "expr": "memory_usage_bytes / 1024 / 1024",
+            "legendFormat": "Memory (MB)",
+            "refId": "B",
+            "yAxisIndex": 1
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {"lineWidth": 2}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Memory (MB)"},
+              "properties": [{"id": "unit", "value": "decmbytes"}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 7,
+        "title": "Embedding 限流等待时间",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(embedding_throttle_wait_seconds_sum[5m]) / rate(embedding_throttle_wait_seconds_count[5m])",
+            "legendFormat": "平均等待时间",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 0.5, "color": "yellow"},
+                {"value": 1, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "错误率趋势 (Embedding & LLM)",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(embedding_errors_total[5m])",
+            "legendFormat": "Embedding Errors ({{error_type}})",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(llm_errors_total[5m])",
+            "legendFormat": "LLM Errors ({{error_type}})",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "记忆召回结果数量分布",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(memory_recall_results_count_bucket[5m])) by (le, layer)",
+            "format": "heatmap",
+            "legendFormat": "{{layer}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "calculate": false,
+          "cellGap": 2,
+          "color": {
+            "mode": "scheme",
+            "scheme": "Spectral"
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+# Prometheus 全局配置
+global:
+  scrape_interval: 15s          # 默认抓取间隔
+  evaluation_interval: 15s      # 规则评估间隔
+  scrape_timeout: 10s
+  external_labels:
+    cluster: 'memoryos-prod'
+    environment: 'production'
+
+# 告警规则文件
+rule_files:
+  - 'alerts.yml'
+
+# 抓取配置
+scrape_configs:
+  # MemoryOS 主服务
+  - job_name: 'memoryos-api'
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Windows/Mac Docker Desktop
+        # - targets: ['172.17.0.1:8080']        # Linux 宿主机访问
+        labels:
+          service: 'memoryos-api'
+          role: 'backend'
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # API 服务更频繁采集
+
+  # Prometheus 自监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Grafana 自监控 (可选)
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          service: 'grafana'

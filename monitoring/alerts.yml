@@ -1,0 +1,112 @@
+# Prometheus 告警规则
+# 覆盖核心业务指标和系统健康
+
+groups:
+  # P0: 核心业务告警 (立即处理)
+  - name: memoryos_p0_alerts
+    interval: 30s
+    rules:
+      # 混合召回延迟过高
+      - alert: HighRecallLatency
+        expr: histogram_quantile(0.95, rate(memory_recall_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "记忆召回延迟过高 (P95 > 2s)"
+          description: "{{ $labels.stage }} 阶段召回延迟 P95 = {{ $value | humanizeDuration }}"
+          runbook: "检查向量数据库性能、Embedding API 响应时间"
+
+      # 记忆创建失败率过高
+      - alert: HighMemoryCreationFailureRate
+        expr: |
+          sum(rate(memory_create_total{status="failure"}[5m])) / 
+          sum(rate(memory_create_total[5m])) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "记忆创建失败率超过 5%"
+          description: "当前失败率 = {{ $value | humanizePercentage }}"
+          runbook: "检查 Embedding API、数据库连接状态"
+
+      # Embedding API 高错误率
+      - alert: HighEmbeddingErrorRate
+        expr: |
+          sum(rate(embedding_errors_total[5m])) / 
+          sum(rate(embedding_requests_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          priority: P1
+        annotations:
+          summary: "Embedding 生成错误率超过 10%"
+          description: "错误类型分布: {{ $labels.error_type }}"
+          runbook: "检查灵娅 API 配额、网络连接"
+
+  # P1: 性能降级告警
+  - name: memoryos_p1_alerts
+    interval: 1m
+    rules:
+      # LLM 调用延迟过高
+      - alert: HighLLMLatency
+        expr: histogram_quantile(0.95, rate(llm_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          priority: P1
+        annotations:
+          summary: "LLM 调用延迟过高 (P95 > 5s)"
+          description: "Provider={{ $labels.provider }}, Model={{ $labels.model }}, Latency={{ $value | humanizeDuration }}"
+
+      # Embedding 限流等待过长
+      - alert: HighEmbeddingThrottleTime
+        expr: rate(embedding_throttle_wait_seconds_sum[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          priority: P1
+        annotations:
+          summary: "Embedding 限流等待时间过长"
+          description: "平均等待 {{ $value | humanizeDuration }}/次，考虑增加并发或降低请求频率"
+
+  # P2: 系统健康告警
+  - name: memoryos_system_alerts
+    interval: 1m
+    rules:
+      # Goroutine 泄漏检测
+      - alert: GoroutineLeakSuspected
+        expr: goroutines_count > 100
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "Goroutine 数量异常增长"
+          description: "当前 Goroutine 数 = {{ $value }}，可能存在泄漏"
+          runbook: "使用 pprof 分析 Goroutine 堆栈"
+
+      # 内存使用过高
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes > 500 * 1024 * 1024  # 500 MB
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "内存占用超过 500 MB"
+          description: "当前内存 = {{ $value | humanize1024 }} Bytes"
+
+      # 服务不可用
+      - alert: MemoryOSDown
+        expr: up{job="memoryos-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "MemoryOS 服务不可用"
+          description: "无法访问 /metrics 端点，服务可能已宕机"
+          runbook: "检查进程状态、日志、系统资源"

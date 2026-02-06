@@ -1,0 +1,67 @@
+version: '3.8'
+
+# MemoryOS 监控栈
+# 包含 Prometheus (数据采集) + Grafana (可视化)
+
+services:
+  # Prometheus 时序数据库
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: memoryos-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'  # 保留 15 天数据
+      - '--web.enable-lifecycle'              # 允许热重载配置
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # Grafana 可视化平台
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: memoryos-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=memoryos123  # 生产环境请修改
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # (可选) AlertManager 告警管理器
+  # alertmanager:
+  #   image: prom/alertmanager:v0.27.0
+  #   container_name: memoryos-alertmanager
+  #   ports:
+  #     - "9093:9093"
+  #   volumes:
+  #     - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+  #   restart: unless-stopped
+  #   networks:
+  #     - monitoring
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  monitoring:
+    driver: bridge
