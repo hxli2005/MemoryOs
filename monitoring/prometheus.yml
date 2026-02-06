@@ -16,8 +16,7 @@ scrape_configs:
   # MemoryOS 主服务
   - job_name: 'memoryos-api'
     static_configs:
-      - targets: ['host.docker.internal:8080']  # Windows/Mac Docker Desktop
-        # - targets: ['172.17.0.1:8080']        # Linux 宿主机访问
+      - targets: ['memoryos:8080']  # Docker Compose 容器网络（推荐）
         labels:
           service: 'memoryos-api'
           role: 'backend'
