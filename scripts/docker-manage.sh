@@ -21,23 +21,23 @@ read -p "请输入选项 (0-8): " choice
 case $choice in
     1)
         echo "启动所有服务..."
-        docker compose up -d
+        docker compose -f deploy/compose/docker-compose.yml up -d
         ;;
     2)
         echo "停止所有服务..."
-        docker compose down
+        docker compose -f deploy/compose/docker-compose.yml down
         ;;
     3)
         echo "重启应用..."
-        docker compose restart memoryos
+        docker compose -f deploy/compose/docker-compose.yml restart memoryos
         ;;
     4)
         echo "查看日志（按 Ctrl+C 退出）..."
-        docker compose logs -f memoryos
+        docker compose -f deploy/compose/docker-compose.yml logs -f memoryos
         ;;
     5)
         echo "服务状态:"
-        docker compose ps
+        docker compose -f deploy/compose/docker-compose.yml ps
         ;;
     6)
         echo "进入 PostgreSQL（输入 \q 退出）..."
@@ -50,7 +50,7 @@ case $choice in
     8)
         read -p "⚠️  确认删除所有数据? (y/N): " confirm
         if [ "$confirm" = "y" ]; then
-            docker compose down -v
+            docker compose -f deploy/compose/docker-compose.yml down -v
             rm -rf data/
             echo "✅ 已清理所有数据"
         else

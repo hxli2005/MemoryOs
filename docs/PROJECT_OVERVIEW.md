@@ -136,9 +136,13 @@ MemoryOs/
 ├── bin/                        # 编译产物
 │   └── server.exe
 │
-├── docker-compose.yml          # 本地开发环境
-├── docker-compose.4c4g.yml     # 腾讯云 4C4G 生产环境
-├── docker-compose.monitoring.yml  # 监控服务
+├── deploy/                     # 部署相关配置
+│   ├── compose/                # Docker Compose 配置
+│   │   ├── docker-compose.yml          # 本地开发环境
+│   │   ├── docker-compose.4c4g.yml     # 腾讯云 4C4G 生产环境
+│   │   └── docker-compose.monitoring.yml  # 监控服务
+│   └── nginx.conf              # Nginx 反向代理配置
+│
 ├── Dockerfile                  # 生产镜像定义
 ├── Makefile                    # 构建命令
 ├── go.mod & go.sum             # Go 依赖管理

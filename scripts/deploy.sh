@@ -75,15 +75,15 @@ fi
 
 # 3. 停止旧服务（可选）
 log_info "步骤 3/7: 停止旧服务..."
-docker-compose -f docker-compose.4c4g.yml down || log_warn "没有运行中的服务"
+docker-compose -f deploy/compose/docker-compose.4c4g.yml down || log_warn "没有运行中的服务"
 
 # 4. 构建镜像
 log_info "步骤 4/7: 构建 Docker 镜像..."
-docker-compose -f docker-compose.4c4g.yml build --no-cache memoryos
+docker-compose -f deploy/compose/docker-compose.4c4g.yml build --no-cache memoryos
 
 # 5. 启动服务
 log_info "步骤 5/7: 启动服务..."
-docker-compose -f docker-compose.4c4g.yml up -d
+docker-compose -f deploy/compose/docker-compose.4c4g.yml up -d
 
 # 6. 等待服务启动
 log_info "步骤 6/7: 等待服务启动..."
@@ -103,7 +103,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     RETRY_COUNT=$((RETRY_COUNT + 1))
     if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
         log_error "❌ 健康检查失败"
-        log_error "查看日志: docker-compose -f docker-compose.4c4g.yml logs memoryos"
+        log_error "查看日志: docker-compose -f deploy/compose/docker-compose.4c4g.yml logs memoryos"
         exit 1
     fi
     
@@ -116,7 +116,7 @@ log_info ""
 log_info "====================================="
 log_info "📊 服务运行状态"
 log_info "====================================="
-docker-compose -f docker-compose.4c4g.yml ps
+docker-compose -f deploy/compose/docker-compose.4c4g.yml ps
 
 # 显示访问地址
 log_info ""
@@ -129,9 +129,9 @@ log_info "  - Prometheus: http://localhost:9090"
 log_info "  - Grafana: http://localhost:3000 (admin / memoryos123)"
 log_info ""
 log_info "查看日志:"
-log_info "  docker-compose -f docker-compose.4c4g.yml logs -f"
+log_info "  docker-compose -f deploy/compose/docker-compose.4c4g.yml logs -f"
 log_info ""
 log_info "停止服务:"
-log_info "  docker-compose -f docker-compose.4c4g.yml down"
+log_info "  docker-compose -f deploy/compose/docker-compose.4c4g.yml down"
 log_info ""
 log_warn "提示: 请配置 Nginx 反向代理和 SSL 证书以启用 HTTPS 访问"

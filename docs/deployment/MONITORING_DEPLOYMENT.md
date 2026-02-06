@@ -108,7 +108,7 @@ curl -X POST http://localhost:9090/-/reload
 
 ### 修改数据保留时长
 
-编辑 `docker-compose.monitoring.yml`:
+编辑 `deploy/compose/docker-compose.monitoring.yml`:
 
 ```yaml
 command:
@@ -169,13 +169,13 @@ receivers:
 
 ```powershell
 # 停止服务 (保留数据)
-docker-compose -f docker-compose.monitoring.yml stop
+docker-compose -f deploy/compose/docker-compose.monitoring.yml stop
 
 # 停止并删除容器 (保留数据卷)
-docker-compose -f docker-compose.monitoring.yml down
+docker-compose -f deploy/compose/docker-compose.monitoring.yml down
 
 # 完全清理 (删除数据卷)
-docker-compose -f docker-compose.monitoring.yml down -v
+docker-compose -f deploy/compose/docker-compose.monitoring.yml down -v
 ```
 
 ## 性能优化建议

@@ -6,13 +6,16 @@
 
 ```
 MemoryOs/
-├── docker-compose.4c4g.yml       # 4C4G 优化配置
-├── .github/workflows/deploy.yml  # GitHub Actions CI/CD
-├── deploy/nginx.conf             # Nginx 反向代理配置
-├── scripts/
-│   ├── init-server.sh           # 服务器初始化脚本
-│   └── deploy.sh                # 一键部署脚本
-└── .dockerignore                # Docker 构建忽略文件
+├── deploy/
+│   ├── compose/
+│   │   ├── docker-compose.yml          # 本地开发环境
+│   │   ├── docker-compose.4c4g.yml     # 4C4G 生产环境
+│   │   └── docker-compose.monitoring.yml # 监控服务
+│   └── nginx.conf                       # Nginx 反向代理配置
+├── .github/workflows/deploy.yml         # GitHub Actions CI/CD
+└── scripts/
+    ├── init-server.sh                   # 服务器初始化脚本
+    └── deploy.sh                        # 一键部署脚本
 ```
 
 ---
@@ -210,28 +213,28 @@ git push origin main
 
 ```bash
 cd /root/MemoryOs
-docker-compose -f docker-compose.4c4g.yml ps
+docker-compose -f deploy/compose/docker-compose.4c4g.yml ps
 ```
 
 ### 查看日志
 
 ```bash
 # 查看所有服务日志
-docker-compose -f docker-compose.4c4g.yml logs -f
+docker-compose -f deploy/compose/docker-compose.4c4g.yml logs -f
 
 # 查看特定服务日志
-docker-compose -f docker-compose.4c4g.yml logs -f memoryos
-docker-compose -f docker-compose.4c4g.yml logs -f postgres
+docker-compose -f deploy/compose/docker-compose.4c4g.yml logs -f memoryos
+docker-compose -f deploy/compose/docker-compose.4c4g.yml logs -f postgres
 ```
 
 ### 重启服务
 
 ```bash
 # 重启所有服务
-docker-compose -f docker-compose.4c4g.yml restart
+docker-compose -f deploy/compose/docker-compose.4c4g.yml restart
 
 # 重启单个服务
-docker-compose -f docker-compose.4c4g.yml restart memoryos
+docker-compose -f deploy/compose/docker-compose.4c4g.yml restart memoryos
 ```
 
 ### 进入容器
@@ -285,7 +288,7 @@ nano config/config.yaml  # 修改 database.password
 
 ```bash
 # 仅允许 Nginx 反向代理访问
-# 修改 docker-compose.4c4g.yml，移除端口映射:
+# 修改 deploy/compose/docker-compose.4c4g.yml，移除端口映射:
 # ports:
 #   - "8080:8080"  # 删除此行
 
@@ -346,7 +349,7 @@ memory_usage_bytes / 1024 / 1024
 
 ```bash
 # 查看详细日志
-docker-compose -f docker-compose.4c4g.yml logs memoryos
+docker-compose -f deploy/compose/docker-compose.4c4g.yml logs memoryos
 
 # 常见原因:
 # - 配置文件错误: 检查 config/config.yaml
