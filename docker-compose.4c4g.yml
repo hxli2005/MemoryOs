@@ -1,0 +1,183 @@
+version: '3.8'
+
+# MemoryOS 4C4G 腾讯云部署配置
+# 优化资源分配，充分利用 4 核心 CPU 优势
+# 总内存占用: ~2.5GB / 4GB (剩余 37% 缓冲)
+
+services:
+  # MemoryOS API 服务
+  memoryos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memoryos-api
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=memoryos
+      - DB_PASSWORD=${DB_PASSWORD:-memoryos2024}
+      - DB_NAME=memoryos
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - SERVER_MODE=${SERVER_MODE:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 1g
+    mem_reservation: 512m
+    cpus: 1.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - memoryos-network
+
+  # PostgreSQL 数据库（增强配置）
+  postgres:
+    image: pgvector/pgvector:pg14
+    container_name: memoryos-postgres
+    environment:
+      - POSTGRES_DB=memoryos
+      - POSTGRES_USER=memoryos
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-memoryos2024}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    mem_limit: 768m
+    mem_reservation: 512m
+    cpus: 1.0
+    command: |
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=16MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_connections=100
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memoryos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - memoryos-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: memoryos-redis
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - memoryos-network
+
+  # Prometheus 监控（7天数据）
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: memoryos-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=2GB'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--query.max-concurrency=20'
+      - '--query.timeout=2m'
+    mem_limit: 512m
+    mem_reservation: 384m
+    cpus: 0.5
+    restart: unless-stopped
+    depends_on:
+      - memoryos
+    networks:
+      - memoryos-network
+
+  # Grafana 可视化
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: memoryos-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-memoryos123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources:ro
+    mem_limit: 256m
+    mem_reservation: 192m
+    cpus: 0.5
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    networks:
+      - memoryos-network
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  memoryos-network:
+    driver: bridge

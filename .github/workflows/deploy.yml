@@ -1,0 +1,237 @@
+name: Deploy to Tencent Cloud
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # 允许手动触发
+
+env:
+  REGISTRY: ccr.ccs.tencentyun.com
+  IMAGE_NAME: memoryos/memoryos-api
+
+jobs:
+  # 代码测试
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.txt
+          flags: unittests
+          fail_ci_if_error: false
+
+  # 构建 Docker 镜像
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Tencent Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.TENCENT_CCR_USERNAME }}
+          password: ${{ secrets.TENCENT_CCR_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  # 部署到腾讯云服务器
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: production
+      url: https://${{ secrets.SERVER_DOMAIN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            
+            echo "=== 开始部署 MemoryOS ==="
+            
+            # 进入项目目录
+            cd /root/MemoryOs || { echo "项目目录不存在"; exit 1; }
+            
+            # 拉取最新代码
+            echo "1. 拉取最新代码..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            # 登录容器镜像仓库
+            echo "2. 登录容器镜像仓库..."
+            echo "${{ secrets.TENCENT_CCR_PASSWORD }}" | docker login ${{ env.REGISTRY }} \
+              -u ${{ secrets.TENCENT_CCR_USERNAME }} --password-stdin
+            
+            # 拉取最新镜像
+            echo "3. 拉取最新镜像..."
+            docker-compose -f docker-compose.4c4g.yml pull memoryos
+            
+            # 备份当前运行的容器
+            echo "4. 创建备份..."
+            BACKUP_IMAGE="memoryos-backup-$(date +%Y%m%d-%H%M%S)"
+            docker tag memoryos-api:current "$BACKUP_IMAGE" 2>/dev/null || true
+            
+            # 滚动更新（零停机）
+            echo "5. 执行滚动更新..."
+            docker-compose -f docker-compose.4c4g.yml up -d --no-deps --build memoryos
+            
+            # 等待服务启动
+            echo "6. 等待服务启动..."
+            sleep 15
+            
+            # 健康检查
+            echo "7. 执行健康检查..."
+            for i in {1..10}; do
+              if curl -f http://localhost:8080/health; then
+                echo "✅ 健康检查通过"
+                break
+              fi
+              if [ $i -eq 10 ]; then
+                echo "❌ 健康检查失败，开始回滚..."
+                docker-compose -f docker-compose.4c4g.yml down memoryos
+                docker tag "$BACKUP_IMAGE" memoryos-api:current
+                docker-compose -f docker-compose.4c4g.yml up -d memoryos
+                exit 1
+              fi
+              echo "等待服务就绪... ($i/10)"
+              sleep 3
+            done
+            
+            # 清理旧镜像
+            echo "8. 清理旧镜像..."
+            docker image prune -f
+            
+            # 查看运行状态
+            echo "9. 服务运行状态:"
+            docker-compose -f docker-compose.4c4g.yml ps
+            
+            echo "=== 部署完成 ==="
+
+      - name: Verify deployment
+        run: |
+          echo "验证部署结果..."
+          sleep 5
+          curl -f https://${{ secrets.SERVER_DOMAIN }}/health || \
+          curl -f http://${{ secrets.SERVER_HOST }}:8080/health
+
+      - name: Notify deployment success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.sha.substring(0, 7);
+            const message = `🚀 MemoryOS 部署成功！\n\n` +
+              `📦 版本: ${sha}\n` +
+              `🌐 环境: Production\n` +
+              `⏰ 时间: ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n` +
+              `👤 操作者: ${context.actor}`;
+            
+            console.log(message);
+            
+            // 可选：发送到钉钉/企业微信
+            // await fetch(process.env.WEBHOOK_URL, {
+            //   method: 'POST',
+            //   headers: { 'Content-Type': 'application/json' },
+            //   body: JSON.stringify({ text: message })
+            // });
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `❌ MemoryOS 部署失败！\n\n` +
+              `请检查 GitHub Actions 日志`;
+            console.error(message);
+
+  # 回滚功能（手动触发）
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+    steps:
+      - name: Rollback deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /root/MemoryOs
+            echo "执行回滚操作..."
+            
+            # 查找最近的备份镜像
+            BACKUP_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | \
+              grep "memoryos-backup" | head -n 1)
+            
+            if [ -z "$BACKUP_IMAGE" ]; then
+              echo "❌ 未找到备份镜像"
+              exit 1
+            fi
+            
+            echo "回滚到版本: $BACKUP_IMAGE"
+            docker-compose -f docker-compose.4c4g.yml down memoryos
+            docker tag "$BACKUP_IMAGE" memoryos-api:current
+            docker-compose -f docker-compose.4c4g.yml up -d memoryos
+            
+            sleep 10
+            curl -f http://localhost:8080/health && echo "✅ 回滚成功" || echo "❌ 回滚失败"
