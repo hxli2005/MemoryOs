@@ -2,6 +2,11 @@
 # Stage 1: 构建阶段
 FROM golang:1.24-alpine AS builder
 
+# 设置国内 Go 模块代理（加速依赖下载）
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+ENV CGO_ENABLED=0
+
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
 
