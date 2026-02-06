@@ -1,6 +1,6 @@
 # 多阶段构建 - 优化镜像体积
 # Stage 1: 构建阶段
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
