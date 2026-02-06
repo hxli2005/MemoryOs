@@ -1,0 +1,193 @@
+version: '3.8'
+
+# MemoryOS 完整部署 - 2C4G 优化配置
+# 适用场景: 个人项目/小团队（10-50 并发用户）
+
+services:
+  # MemoryOS API 服务
+  memoryos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memoryos-api
+    ports:
+      - "8080:8080"
+    environment:
+      # 数据库配置
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=memoryos
+      - DB_USER=memoryos
+      - DB_PASSWORD=memoryos_secure_password
+      - DB_MAX_OPEN_CONNS=20          # 2C4G 可支持 20 个连接
+      - DB_MAX_IDLE_CONNS=10
+      
+      # Redis 配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      
+      # 应用配置
+      - GIN_MODE=release
+      - LOG_LEVEL=info
+    mem_limit: 1g                     # 最大 1GB（实际占用 ~200MB）
+    mem_reservation: 512m
+    cpus: 1.0
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - memoryos-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL + pgvector
+  postgres:
+    image: pgvector/pgvector:pg14
+    container_name: memoryos-postgres
+    environment:
+      POSTGRES_DB: memoryos
+      POSTGRES_USER: memoryos
+      POSTGRES_PASSWORD: memoryos_secure_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql  # 可选：初始化脚本
+    mem_limit: 1g
+    mem_reservation: 512m
+    cpus: 0.5
+    command: |
+      postgres
+      -c shared_buffers=256MB              # 2C4G 最优配置
+      -c effective_cache_size=1GB          # 利用系统缓存
+      -c maintenance_work_mem=128MB        # pgvector 索引构建
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1              # SSD 优化
+      -c effective_io_concurrency=200
+      -c work_mem=16MB                     # 复杂查询内存
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=2
+      -c max_parallel_workers_per_gather=1
+      -c max_parallel_workers=2
+      -c max_connections=50                # 2C4G 可支持 50 连接
+    restart: unless-stopped
+    networks:
+      - memoryos-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memoryos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: memoryos-redis
+    mem_limit: 256m                       # 2C4G 可分配 256MB
+    mem_reservation: 128m
+    cpus: 0.25
+    command: |
+      redis-server
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - memoryos-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: memoryos-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus-data:/prometheus
+    mem_limit: 768m                       # 2C4G 可分配更多内存
+    mem_reservation: 512m
+    cpus: 0.5
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'       # 保留 7 天数据
+      - '--storage.tsdb.retention.size=512MB'    # 限制磁盘占用
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--query.max-concurrency=10'
+      - '--query.timeout=2m'
+    restart: unless-stopped
+    networks:
+      - memoryos-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana 可视化
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: memoryos-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=memoryos123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+      - GF_DATABASE_TYPE=sqlite3            # 使用 SQLite 减少依赖
+      - GF_DATABASE_PATH=/var/lib/grafana/grafana.db
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 0.25
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - memoryos-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  memoryos-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
