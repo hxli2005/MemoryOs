@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yourusername/MemoryOs/internal/bootstrap"
 	"github.com/yourusername/MemoryOs/internal/handler"
+	"github.com/yourusername/MemoryOs/internal/metrics"
 )
 
 func main() {
@@ -65,6 +68,21 @@ func main() {
 			"redis":   redisOK,
 		})
 	})
+
+	// Prometheus Metrics 端点
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// 系统指标采集（定时更新）
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			metrics.GoroutinesCount.Set(float64(runtime.NumGoroutine()))
+			metrics.MemoryUsageBytes.Set(float64(m.Alloc))
+		}
+	}()
 
 	// 注册业务路由
 	memoryHandler := handler.NewMemoryHandler(app.MemoryManager)

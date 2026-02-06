@@ -11,12 +11,8 @@ scripts/
 │   ├── stop_docker.bat
 │   ├── logs_docker.bat
 │   └── start_chatbot.bat
-├── build/            # 构建相关
-│   └── monitor_build.bat
-└── test/             # 测试相关
-    ├── test_docker.bat
-    ├── test_milvus.bat
-    └── test_storage.ps1
+└── build/            # 构建相关
+    └── monitor_build.bat
 ```
 
 ## 开发脚本 (dev/)
@@ -47,17 +43,6 @@ chmod +x start_docker.sh
 
 ### monitor_build.bat
 监控构建过程并输出详细日志
-
-## 测试脚本 (test/)
-
-### test_docker.bat
-测试 Docker 服务连通性
-
-### test_milvus.bat
-测试 Milvus 向量数据库功能
-
-### test_storage.ps1
-测试存储层完整性（PostgreSQL + Milvus）
 
 ---
 

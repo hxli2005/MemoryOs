@@ -2,11 +2,13 @@ package adapter
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/yourusername/MemoryOs/internal/metrics"
 )
 
 var (
@@ -39,6 +41,15 @@ func NewEinoEmbedderWithDim(embedder embedding.Embedder, targetDim int) *EinoEmb
 }
 
 func (e *EinoEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	start := time.Now()
+
+	// 延迟记录指标
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.EmbeddingDuration.Observe(duration)
+		metrics.EmbeddingRequestsTotal.Inc()
+	}()
+
 	// 🔒 全局锁:确保同一时间只有一个 Embedding 请求,防止并发触发 403
 	embeddingMutex.Lock()
 	defer embeddingMutex.Unlock()
@@ -47,7 +58,10 @@ func (e *EinoEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	if !lastRequestTime.IsZero() {
 		elapsed := time.Since(lastRequestTime)
 		if elapsed < minRequestInterval {
-			time.Sleep(minRequestInterval - elapsed)
+			waitTime := minRequestInterval - elapsed
+			time.Sleep(waitTime)
+			// 记录实际等待时间
+			metrics.EmbeddingThrottleWaitSeconds.Observe(waitTime.Seconds())
 		}
 	}
 
@@ -55,6 +69,17 @@ func (e *EinoEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	lastRequestTime = time.Now() // 记录请求时间
 
 	if err != nil {
+		// 记录错误类型
+		errorType := "unknown"
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "Forbidden") {
+			errorType = "throttled"
+		} else if strings.Contains(errMsg, "timeout") {
+			errorType = "timeout"
+		} else if strings.Contains(errMsg, "invalid") || strings.Contains(errMsg, "parse") {
+			errorType = "invalid_response"
+		}
+		metrics.EmbeddingErrorsTotal.WithLabelValues(errorType).Inc()
 		return nil, err
 	}
 	if len(result) == 0 {

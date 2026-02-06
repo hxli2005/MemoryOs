@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"google.golang.org/genai"
 
+	"github.com/yourusername/MemoryOs/internal/metrics"
 	memoryModel "github.com/yourusername/MemoryOs/internal/model"
 	"github.com/yourusername/MemoryOs/internal/service/memory"
 )
@@ -63,6 +65,17 @@ func NewGeminiClient(cfg GeminiConfig) (*GeminiClient, error) {
 
 // GenerateText 通用文本生成（用于 Chatbot 回复）
 func (c *GeminiClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	start := time.Now()
+	provider := "gemini"
+	modelName := c.config.Model
+
+	// 延迟记录指标
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.LLMDuration.WithLabelValues(provider, modelName).Observe(duration)
+		metrics.LLMRequestsTotal.WithLabelValues(provider, modelName, "chat").Inc()
+	}()
+
 	resp, err := c.chatModel.Generate(ctx, []*schema.Message{
 		{
 			Role:    schema.User,
@@ -70,6 +83,16 @@ func (c *GeminiClient) GenerateText(ctx context.Context, prompt string) (string,
 		},
 	})
 	if err != nil {
+		// 记录错误
+		errorType := "unknown"
+		if strings.Contains(err.Error(), "timeout") {
+			errorType = "timeout"
+		} else if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota") {
+			errorType = "rate_limit"
+		} else if strings.Contains(err.Error(), "500") || strings.Contains(err.Error(), "503") {
+			errorType = "server_error"
+		}
+		metrics.LLMErrorsTotal.WithLabelValues(provider, errorType).Inc()
 		return "", fmt.Errorf("gemini generate failed: %w", err)
 	}
 

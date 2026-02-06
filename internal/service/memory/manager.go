@@ -8,6 +8,7 @@ import (
 
 	// 生成唯一 ID
 	"github.com/google/uuid"
+	"github.com/yourusername/MemoryOs/internal/metrics"
 	"github.com/yourusername/MemoryOs/internal/model"
 )
 
@@ -56,6 +57,15 @@ func (m *Manager) MetaStore() MetadataStore {
 // CreateMemory 创建记忆（支持三层架构）
 // 根据 Layer 和 Type 自动处理不同存储逻辑
 func (m *Manager) CreateMemory(ctx context.Context, memory *model.Memory) error {
+	start := time.Now()
+	layer := string(memory.Layer)
+
+	// 延迟记录指标
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.MemoryCreateDuration.WithLabelValues(layer).Observe(duration)
+	}()
+
 	// [第1部分] 输入验证
 	if memory == nil {
 		return fmt.Errorf("memory 不能为 nil")
@@ -125,8 +135,12 @@ func (m *Manager) CreateMemory(ctx context.Context, memory *model.Memory) error 
 
 	// [第5部分] 存储到元数据库
 	if err := m.metaStore.Insert(ctx, memory); err != nil {
+		metrics.MemoryCreateTotal.WithLabelValues(layer, "failure").Inc()
 		return fmt.Errorf("存储到元数据库失败: %w", err)
 	}
+
+	// 成功记录
+	metrics.MemoryCreateTotal.WithLabelValues(layer, "success").Inc()
 
 	// [第6部分] 对话层特殊处理：触发聚合检查
 	if memory.Layer == model.LayerDialogue {
@@ -364,6 +378,18 @@ func (m *Manager) embedWithRetry(ctx context.Context, text string, maxRetries in
 // 核心创新：动态熵减策略
 // 使用场景：每次对话前的记忆加载
 func (m *Manager) HybridRecall(ctx context.Context, req ChatbotRecallRequest) (*ChatbotRecallResult, error) {
+	start := time.Now()
+	stage := req.DialogStage
+	if stage == "" {
+		stage = "default"
+	}
+
+	// 延迟记录指标
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.MemoryRecallDuration.WithLabelValues(stage).Observe(duration)
+	}()
+
 	// 输入验证
 	if req.UserID == "" {
 		return nil, fmt.Errorf("userID 不能为空")
@@ -471,16 +497,22 @@ func (m *Manager) HybridRecall(ctx context.Context, req ChatbotRecallRequest) (*
 		switch res.layer {
 		case "profile":
 			result.ProfileMemories = res.memories
+			metrics.MemoryRecallResultsCount.WithLabelValues("profile").Observe(float64(len(res.memories)))
 		case "topic":
 			result.TopicMemories = res.memories
+			metrics.MemoryRecallResultsCount.WithLabelValues("topic").Observe(float64(len(res.memories)))
 		case "dialogue":
 			result.DialogueMemories = res.memories
+			metrics.MemoryRecallResultsCount.WithLabelValues("dialogue").Observe(float64(len(res.memories)))
 		}
 	}
 
 	// 计算实际使用的 token 数（简化估算）
 	totalMemories := len(result.ProfileMemories) + len(result.TopicMemories) + len(result.DialogueMemories)
 	result.TokensUsed = totalMemories * 100 // 假设每条 100 tokens
+
+	// 记录成功
+	metrics.MemoryRecallTotal.WithLabelValues(result.Strategy, "success").Inc()
 
 	return result, nil
 }
