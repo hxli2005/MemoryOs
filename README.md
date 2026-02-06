@@ -1,12 +1,14 @@
 # 🧠 MemoryOS
 
 > **基于 RAG 架构的 AI Agent 长期记忆系统**  
-> 生产级实现 | Docker 一键部署 | QQ Bot 完整示例
+> 生产级实现 | Docker 一键部署 | 云端可观测
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](https://golang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](docker-compose.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/dev/CONTRIBUTING.md)
+
+📚 **[项目结构总览](docs/PROJECT_OVERVIEW.md)** | **[部署指南](docs/deployment/DEPLOYMENT_GUIDE.md)** | **[API 文档](docs/api/API_GUIDE.md)**
 
 ## ✨ 核心特性
 

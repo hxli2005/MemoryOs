@@ -32,7 +32,8 @@ config/config.yaml
 
 # Logs
 *.log
-logs/
+logs/*.log
+!logs/.gitkeep
 
 # OS
 .DS_Store
@@ -41,13 +42,20 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*.local
 
 # Docker
 data/
 docker/daemon*.json
+**/postgres-data/
+**/redis-data/
+**/prometheus-data/
+**/grafana-data/
 
 # Temporary
 tmp/
+*.tmp
+.cache/
 temp/
 pkg/
 
